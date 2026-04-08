@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Mali:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --sakura-pink: #ffb7c5;
+            --sakura-light: #ffdce3;
+            --branch-brown: #70483c;
+        }
+
+        body {
+            font-family: 'Mali', cursive;
+            background-color: var(--sakura-light);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            background-image: radial-gradient(var(--sakura-pink) 0.5px, transparent 0.5px);
+            background-size: 25px 25px;
+        }
+
+        .sidebar {
+            width: 200px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 3px solid var(--sakura-pink);
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            margin-left: 20px;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.05);
+            z-index: 2000;
+        }
+
+        h1 { font-family: 'Dancing Script', cursive; color: var(--branch-brown); margin: 0 0 10px 0; font-size: 1.5rem; text-align: center; cursor: pointer; }
+
+        .input-group { display: flex; flex-direction: column; gap: 8px; }
+
+        input { padding: 10px; border-radius: 10px; border: 2px solid var(--sakura-pink); font-family: 'Mali', cursive; outline: none; width: 85%; }
+
+        button.add-btn { padding: 10px; background: var(--branch-brown); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; width: 100%; }
+
+        #confirm-box { display: none; background: #fff0f3; padding: 10px; border-radius: 10px; margin-top: 10px; border: 1px solid var(--sakura-pink); font-size: 0.8rem; text-align: center; }
+        .yes-btn { background: #d63384; color: white; border: none; padding: 5px; border-radius: 5px; cursor: pointer; margin: 5px; }
+
+        /* FIXED GARDEN AREA */
+        .garden-container {
+            flex-grow: 1;
+            height: 100vh;
+            position: relative; /* All petals live inside here */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #drop-zone {
+            width: 70vh;
+            height: 70vh;
+            border: 5px dashed var(--branch-brown);
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            pointer-events: none; /* Allows petals to be dropped "into" it */
+        }
+
+        .petal {
+            width: 100px; 
+            height: 100px;
+            background: white; 
+            position: absolute;
+            cursor: grab; 
+            z-index: 100;
+            border-radius: 5px 45px 5px 45px;
+            border: 2px solid var(--sakura-pink);
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            padding: 5px; text-align: center;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+            background-image: linear-gradient(135deg, #fff 50%, var(--sakura-light) 100%);
+            user-select: none;
+            touch-action: none;
+        }
+
+        .name { font-weight: bold; font-size: 0.9rem; pointer-events: none; }
+        .like { font-size: 0.8rem; color: #d63384; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h1 onclick="showConfirm()">Petal Entry</h1>
+    <div class="input-group">
+        <input type="text" id="name" placeholder="Name">
+        <input type="text" id="like" placeholder="I like...">
+        <button class="add-btn" onclick="addPetal()">Grow Petal</button>
+    </div>
+    
+    <div id="confirm-box">
+        Clear the garden?
+        <button class="yes-btn" onclick="resetGarden()">Yes, Reset</button>
+        <button onclick="hideConfirm()">No</button>
+    </div>
+</div>
+
+<div class="garden-container" id="garden">
+    <div id="drop-zone"></div>
+</div>
+
+<script>
+    window.onload = loadGarden;
+
+    function loadGarden() {
+        const data = JSON.parse(localStorage.getItem('sakuraData')) || [];
+        data.forEach(p => createPetal(p.name, p.like, p.x, p.y, p.rot));
+    }
+
+    function saveGarden() {
+        const petals = document.querySelectorAll('.petal');
+        const data = Array.from(petals).map(p => ({
+            name: p.querySelector('.name').innerText,
+            like: p.querySelector('.like').innerText.replace('♥ ', ''),
+            x: p.style.left,
+            y: p.style.top,
+            rot: p.dataset.rot
+        }));
+        localStorage.setItem('sakuraData', JSON.stringify(data));
+    }
+
+    function addPetal() {
+        const n = document.getElementById('name').value;
+        const l = document.getElementById('like').value;
+        if (!n || !l) return;
+        
+        // Initial spawn location (center-ish)
+        const x = '250px';
+        const y = '200px';
+        const r = (Math.random()*60-30)+'deg';
+        
+        createPetal(n, l, x, y, r);
+        saveGarden();
+        
+        document.getElementById('name').value = '';
+        document.getElementById('like').value = '';
+    }
+
+    function createPetal(name, like, x, y, rot) {
+        const p = document.createElement('div');
+        p.className = 'petal';
+        p.dataset.rot = rot;
+        p.style.left = x; 
+        p.style.top = y; 
+        p.style.transform = `rotate(${rot})`;
+        p.innerHTML = `<div class="name">${name}</div><div class="like">♥ ${like}</div>`;
+        document.getElementById('garden').appendChild(p);
+        makeDraggable(p);
+    }
+
+    function makeDraggable(el) {
+        let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+
+        el.onmousedown = dragMouseDown;
+
+        function dragMouseDown(e) {
+            e.preventDefault();
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            el.style.zIndex = 1000;
+            document.onmouseup = closeDragElement;
+            document.onmousemove = elementDrag;
+        }
+
+        function elementDrag(e) {
+            e.preventDefault();
+            pos1 = pos3 - e.clientX;
+            pos2 = pos4 - e.clientY;
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            el.style.top = (el.offsetTop - pos2) + "px";
+            el.style.left = (el.offsetLeft - pos1) + "px";
+        }
+
+        function closeDragElement() {
+            document.onmouseup = null;
+            document.onmousemove = null;
+            saveGarden(); // Saves the final pixel position
+        }
+    }
+
+    function showConfirm() { document.getElementById('confirm-box').style.display = 'block'; }
+    function hideConfirm() { document.getElementById('confirm-box').style.display = 'none'; }
+    function resetGarden() { 
+        localStorage.removeItem('sakuraData'); 
+        location.reload(); 
+    }
+</script>
+</body>
+</html>
