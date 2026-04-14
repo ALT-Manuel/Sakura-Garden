@@ -108,91 +108,89 @@
     <div id="drop-zone"></div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+
 <script>
-    window.onload = loadGarden;
+    // 1. Connection Settings
+    const firebaseConfig = {
+        databaseURL: "https://sakura-garden-default-rtdb.firebaseio.com/"
+    };
 
-    function loadGarden() {
-        const data = JSON.parse(localStorage.getItem('sakuraData')) || [];
-        data.forEach(p => createPetal(p.name, p.like, p.x, p.y, p.rot));
-    }
+    // 2. Initialize the Cloud
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database().ref('sakura_garden');
 
-    function saveGarden() {
-        const petals = document.querySelectorAll('.petal');
-        const data = Array.from(petals).map(p => ({
-            name: p.querySelector('.name').innerText,
-            like: p.querySelector('.like').innerText.replace('♥ ', ''),
-            x: p.style.left,
-            y: p.style.top,
-            rot: p.dataset.rot
-        }));
-        localStorage.setItem('sakuraData', JSON.stringify(data));
-    }
+    // 3. Sync from Cloud (This runs whenever anyone adds or moves a petal)
+    db.on('value', (snapshot) => {
+        const garden = document.getElementById('garden');
+        // Clear local view before redrawing everything from the cloud
+        document.querySelectorAll('.petal').forEach(p => p.remove());
+        
+        const data = snapshot.val();
+        if (data) {
+            Object.keys(data).forEach(id => {
+                const p = data[id];
+                createPetal(id, p.name, p.like, p.x, p.y, p.rot);
+            });
+        }
+    });
 
+    // 4. Adding a Petal (Sends to Cloud)
     function addPetal() {
         const n = document.getElementById('name').value;
         const l = document.getElementById('like').value;
         if (!n || !l) return;
         
-        // Initial spawn location (center-ish)
-        const x = '250px';
-        const y = '200px';
-        const r = (Math.random()*60-30)+'deg';
+        const newPetal = {
+            name: n,
+            like: l,
+            x: '280px',
+            y: '200px',
+            rot: (Math.random()*60-30)+'deg'
+        };
         
-        createPetal(n, l, x, y, r);
-        saveGarden();
-        
+        db.push(newPetal); // Push to Firebase
         document.getElementById('name').value = '';
         document.getElementById('like').value = '';
     }
 
-    function createPetal(name, like, x, y, rot) {
+    // 5. Drawing the Petal
+    function createPetal(id, name, like, x, y, rot) {
         const p = document.createElement('div');
         p.className = 'petal';
-        p.dataset.rot = rot;
-        p.style.left = x; 
-        p.style.top = y; 
-        p.style.transform = `rotate(${rot})`;
+        p.style.left = x; p.style.top = y; p.style.transform = `rotate(${rot})`;
         p.innerHTML = `<div class="name">${name}</div><div class="like">♥ ${like}</div>`;
         document.getElementById('garden').appendChild(p);
-        makeDraggable(p);
+        makeDraggable(p, id);
     }
 
-    function makeDraggable(el) {
-        let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-
-        el.onmousedown = dragMouseDown;
-
-        function dragMouseDown(e) {
-            e.preventDefault();
-            pos3 = e.clientX;
-            pos4 = e.clientY;
+    // 6. Moving a Petal (Updates Cloud)
+    function makeDraggable(el, id) {
+        let p1=0, p2=0, p3=0, p4=0;
+        el.onmousedown = (e) => {
+            p3 = e.clientX; p4 = e.clientY;
             el.style.zIndex = 1000;
-            document.onmouseup = closeDragElement;
-            document.onmousemove = elementDrag;
-        }
-
-        function elementDrag(e) {
-            e.preventDefault();
-            pos1 = pos3 - e.clientX;
-            pos2 = pos4 - e.clientY;
-            pos3 = e.clientX;
-            pos4 = e.clientY;
-            el.style.top = (el.offsetTop - pos2) + "px";
-            el.style.left = (el.offsetLeft - pos1) + "px";
-        }
-
-        function closeDragElement() {
-            document.onmouseup = null;
-            document.onmousemove = null;
-            saveGarden(); // Saves the final pixel position
-        }
+            document.onmouseup = () => {
+                document.onmouseup = null; document.onmousemove = null;
+                // Update specific petal position for everyone
+                db.child(id).update({ x: el.style.left, y: el.style.top });
+            };
+            document.onmousemove = (e) => {
+                p1 = p3 - e.clientX; p2 = p4 - e.clientY;
+                p3 = e.clientX; p4 = e.clientY;
+                el.style.top = (el.offsetTop - p2) + "px";
+                el.style.left = (el.offsetLeft - p1) + "px";
+            };
+        };
     }
 
+    // 7. Clear Everything
     function showConfirm() { document.getElementById('confirm-box').style.display = 'block'; }
     function hideConfirm() { document.getElementById('confirm-box').style.display = 'none'; }
     function resetGarden() { 
-        localStorage.removeItem('sakuraData'); 
-        location.reload(); 
+        db.remove(); // Deletes the entire cloud folder
+        hideConfirm();
     }
 </script>
 </body>
